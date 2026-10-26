@@ -1,0 +1,1 @@
+ALTER TABLE `contributions` ADD `kind` text DEFAULT 'deposit' NOT NULL;
