@@ -434,6 +434,17 @@ export async function handleRequest(request: Request, db: D1Database) {
           .parse(body);
         if (p.opening_date > today())
           fail("O saldo inicial deve ter data até hoje.");
+        if (
+          d.movements.some(
+            (m) =>
+              m.date < p.opening_date ||
+              (m.effective_date && m.effective_date < p.opening_date),
+          ) ||
+          d.payments.some((paid) => paid.date < p.opening_date)
+        )
+          fail(
+            "Existem movimentações anteriores a essa data. Preserve uma data inicial que inclua todo o histórico.",
+          );
         upd("users", u.id, {
           display_name: p.display_name,
           cycle_day: p.cycle_day,

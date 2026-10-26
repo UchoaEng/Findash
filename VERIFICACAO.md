@@ -1,6 +1,6 @@
 # Registro de verificação — 26/10/2026
 
-- Vitest: 30 testes aprovados, com banco SQLite real e migrations do produto. Cenários A–J e casos adicionais de integridade, concorrência e CSRF.
+- Vitest: 31 testes aprovados, com banco SQLite real e migrations do produto. Cenários A–J e casos adicionais de integridade, concorrência e CSRF.
 - TypeScript: `tsc --noEmit` sem erros.
 - Build: artefato Worker e frontend gerados pelo helper Sites.
 - Banco D1 local: quatro migrations aplicadas e operações de leitura/escrita verificadas.
@@ -11,3 +11,6 @@
 - A suíte HTTP é automatizada. A verificação de interface foi executada por automação de navegador durante esta sessão; não há uma suíte Playwright CLI versionada.
 
 A confirmação de publicação é fornecida pelo serviço de hospedagem e pelo estado terminal do deploy. Limitações e configuração detalhadas no README.
+## Verificação HTTP em produção
+
+Após o deploy, foram aprovados os testes de cadastro, sessão, onboarding, gravação de lançamento, 12 parcelas exatas, pagamento parcial sem duplicar consumo, aporte/reserva conciliados, logout, persistência entre sessões, recuperação com rotação do código e revogação de sessão, rejeição do código antigo e exportação sem credenciais. A conta temporária usada nessa verificação foi excluída ao final. O teste utilizou o acesso de serviço já provisionado pela hospedagem, sem alterar o público privado do Site.

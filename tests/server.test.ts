@@ -431,6 +431,51 @@ describe.sequential("Fluxos reais com banco persistente", () => {
     });
     expect((await handleRequest(huge, db.asD1())).status).toBe(413);
   });
+  it("mudança da data inicial não exclui movimentos do histórico", async () => {
+    const previous = new Date(now + "T12:00:00Z");
+    previous.setUTCDate(previous.getUTCDate() - 1);
+    const oldDate = previous.toISOString().slice(0, 10);
+    await cmd({
+      action: "profile",
+      display_name: "Teste",
+      cycle_day: 1,
+      safety_cents: 0,
+      opening_cents: 600000,
+      opening_date: oldDate,
+      onboarded: true,
+    });
+    await cmd({
+      action: "movement/save",
+      kind: "income",
+      description: "Histórico anterior",
+      amount_cents: 100,
+      category: "Outras rendas",
+      date: oldDate,
+      effective_date: oldDate,
+      priority: 3,
+      frequency: "none",
+    });
+    expect(
+      (
+        await cmd({
+          action: "profile",
+          display_name: "Teste",
+          cycle_day: 1,
+          safety_cents: 0,
+          opening_cents: 600000,
+          opening_date: now,
+          onboarded: true,
+        })
+      ).status,
+    ).toBe(400);
+    const st = (await req("state", undefined, cookieA)).body;
+    await cmd({
+      action: "movement/delete",
+      id: st.data.movements.find(
+        (m: any) => m.description === "Histórico anterior",
+      ).id,
+    });
+  });
   it("G: dados sobrevivem logout, reabertura do banco e novo login", async () => {
     await req("auth/logout", {}, cookieA);
     expect((await req("state", undefined, cookieA)).status).toBe(401);

@@ -93,3 +93,5 @@ O Site é privado por padrão: a hospedagem exige acesso do proprietário via Ch
 P0 implementado no escopo descrito acima. Permanecem fora: frequências semanais/quinzenais automáticas, renovação infinita de recorrências, múltiplas contas/reconciliação avançada, restauração de backup por interface e transferência física de dinheiro. Recorrências têm horizonte explícito e devem ser renovadas ao término. Edição de um aporte é feita pelo estorno do registro e lançamento corrigido, preservando trilha de alterações.
 
 P1/P2 pendentes: simulador de cenários, projeção acumulada com evolução de metas, CSV, PWA, notificações, Open Finance e assistente com IA. O aviso de privacidade não representa certificação de conformidade legal.
+
+A data do saldo inicial não pode ser movida para depois de movimentações existentes: essa validação evita incorporar o mesmo dinheiro novamente ao redefinir a base.
