@@ -13,7 +13,6 @@ import {
   ArrowRight,
   Moon,
   Sun,
-  LoaderCircle,
   CalendarDays,
   CheckCircle2,
   CircleAlert,
@@ -41,6 +40,43 @@ const nav = [
   ["planning", "Planejamento", ChartNoAxesCombined],
   ["settings", "Configurações", SettingsIcon],
 ] as const;
+function LoadingShell() {
+  return (
+    <main className="loading-shell" aria-busy="true" aria-label="Carregando seus dados">
+      <span className="sr-only">Organizando seu espaço financeiro…</span>
+      <div className="loading-top">
+        <span className="skeleton skeleton-brand" />
+        <span className="skeleton skeleton-action" />
+      </div>
+      <div className="loading-title">
+        <span className="skeleton skeleton-line short" />
+        <span className="skeleton skeleton-line heading" />
+        <span className="skeleton skeleton-line medium" />
+      </div>
+      <div className="loading-stats">
+        {[0, 1, 2].map((item) => (
+          <div className="skeleton-card" key={item}>
+            <span className="skeleton skeleton-line short" />
+            <span className="skeleton skeleton-line value" />
+            <span className="skeleton skeleton-line medium" />
+          </div>
+        ))}
+      </div>
+      <div className="loading-panels">
+        <div className="skeleton-card loading-chart">
+          <span className="skeleton skeleton-line short" />
+          <span className="skeleton skeleton-chart" />
+        </div>
+        <div className="skeleton-card loading-list">
+          <span className="skeleton skeleton-line medium" />
+          {[0, 1, 2, 3].map((item) => (
+            <span className="skeleton skeleton-line" key={item} />
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
 export default function Home() {
   const [state, setState] = useState<any>(null),
     [loading, setLoading] = useState(true),
@@ -81,6 +117,29 @@ export default function Home() {
     const t = setTimeout(() => setToast(""), 4500);
     return () => clearTimeout(t);
   }, [toast]);
+  useEffect(() => {
+    if (loading || !state || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const targets = document.querySelectorAll(
+      ".content > .page-header, .content > .onboarding, .content .panel, .content .stat-row, .content .goals-grid > *",
+    );
+    if (!targets.length || !("IntersectionObserver" in window)) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.08, rootMargin: "0px 0px -24px 0px" },
+    );
+    targets.forEach((target) => {
+      target.classList.add("scroll-reveal");
+      observer.observe(target);
+    });
+    return () => observer.disconnect();
+  }, [loading, page, state]);
   const command = async (v: any) => {
     const r = await api("command?month=" + month, v);
     await load();
@@ -102,14 +161,7 @@ export default function Home() {
       text,
       run: () => command({ action, id }),
     });
-  if (loading)
-    return (
-      <div className="page-loading">
-        <Brand />
-        <LoaderCircle size={25} className="spin" />
-        <p>Organizando seu espaço…</p>
-      </div>
-    );
+  if (loading) return <LoadingShell />;
   if (fatal)
     return (
       <div className="page-loading">
