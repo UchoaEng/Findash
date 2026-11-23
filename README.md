@@ -1,13 +1,16 @@
-# Fluxo — gestão financeira pessoal
+# Findash (Fluxo) — personal finance
 
-Aplicação integrada em português, com cadastro por usuário/senha, recuperação de conta, banco persistente, orçamento automático, cartões e metas. Não usa dados fictícios para preencher o dashboard.
+An integrated personal finance app (UI in Portuguese) with username/password sign-up, account recovery, a persistent database, automatic budgeting, credit cards and goals. It never fills the dashboard with fake data.
 
-## Executar localmente
+[🇧🇷 Leia em português](#-português)
 
-Requisitos: Node.js 24 LTS, npm e Git. O Node 24 também fornece o SQLite usado nos testes de integração.
+## Running locally
+
+Requirements: Node.js 24 LTS, npm and Git. Node 24 also provides the SQLite used by the integration tests.
 
 ```powershell
-cd C:\Users\lucas\Documents\ChatGPT\Projeto_fin_dash\fluxo
+git clone https://github.com/UchoaEng/Findash.git
+cd Findash
 npm ci
 npm run build
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_neat_nova.sql
@@ -17,7 +20,100 @@ node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1
 npm run dev
 ```
 
-Abra a URL impressa pelo servidor, normalmente http://127.0.0.1:5173. Aplique cada migration somente uma vez por banco. Os quatro comandos de migration acima são para um banco novo; neste checkout já foram aplicados.
+Open the URL printed by the server, usually http://127.0.0.1:5173. Apply each migration only once per database; the four commands above are for a fresh database.
+
+To test the production artifact locally, run `npm start` after the build and open the URL printed by Wrangler. Development and preview share `.wrangler/state`; don't delete it if you want to keep local data. The production database is separate.
+
+## Verification
+
+```powershell
+npm test
+npm run typecheck
+npm run build
+```
+
+The Vitest suite runs pure calculations and HTTP flows against real SQLite in a temporary file, with foreign keys, transactions and database reopening. It doesn't mock calculations, authorization or persistence. The test adapter reproduces D1's prepared-statement/batch contract; runtime differences are also checked on the local Worker/D1 and on deploy.
+
+Scenarios include allocation, goals, deficit, installments and cents, partial payment, recovery/rotation/revocation, account isolation, CSRF, persistence after logout, reserves across months, reversals, recurrence changes, edge dates and rate limiting.
+
+## What's implemented
+
+- E-mail-free sign-up, normalized usernames, Argon2id (19 MiB, 2 iterations, parallelism 1) and per-user salt.
+- 160-bit recovery code shown once, with copy and download. Only the SHA-256 of the random code is stored; using it rotates the code and revokes previous sessions.
+- Opaque random 256-bit sessions, verifier in the database, 30-day expiry, HttpOnly, SameSite=Strict and Secure-on-HTTPS cookies.
+- Persistent rate limiting per user and origin; Origin checks on mutations. No password or code in logs.
+- Five-step skippable onboarding with multiple income sources, initial balance and configurable cycle.
+- Income/expense CRUD, confirmation/reversal, duplication, search and filters by date, category and status.
+- Monthly (24 occurrences) and yearly (3) recurrences, editable per occurrence or going forward, preserving past and confirmed ones.
+- Credit cards, purchases, up to 60 installments, manual review of the first statement, valid closing/due dates, partial payment and reversal.
+- Goals by deadline or contribution, last contribution capped to what's left, contributions, withdrawals, reversal, history, priorities, pause, completion and archive.
+- Virtual reserves explicitly linked to contributions. Contributions consume the oldest reserves, including other months'; reversals restore the links.
+- Server-calculated dashboard, obligation coverage by priority, confirmed money separate from projections, formula explanation and deterministic diagnosis.
+- Unified history, category limits, 3/6/12-month commitment projection, JSON export and password-confirmed account deletion.
+- Mobile/desktop layout, dark theme, labels, visible focus, native dialog with focus isolation and reduced-motion support.
+
+## Architecture and integrity
+
+`app/` holds the page and HTTP endpoint; `components/` the UI; `lib/finance.ts` the deterministic engine; `lib/server.ts` validation/authorization and operations; `lib/security.ts` credentials; `db/schema.ts` and `drizzle/` the schema and migrations.
+
+Stack: React 19, TypeScript, App Router-style routes, Tailwind and hand-written CSS, Lucide, Zod, Drizzle and Cloudflare D1, running on Vinext (a Next.js-compatible runtime on Vite, pinned beta in the lockfile) as a Cloudflare Worker. It doesn't use PostgreSQL/Prisma, Auth.js or Vercel, and shouldn't be deployed to Vercel without adapting the Worker and D1 dependencies.
+
+All amounts are integer cents. The balance derives from the initial balance, confirmed movements and statement payments. Contributions and reserves aren't cash outflows. Purchases are consumption, installments are debt and payments are cash: a payment never creates a new consumption expense.
+
+Every financial query and mutation filters by owner on the server, and the backend validates links before creating them. Related mutations use atomic D1 batches and optimistic per-user revisions with an exclusive token; concurrent changes return 409 with no partial writes. Free-money checks use the current cycle regardless of the month chosen in the browser.
+
+Card policy: a purchase on the closing day goes to the next cycle; a due day on or before the closing day belongs to the month after closing; nonexistent days are clamped to the month's last day; card changes don't alter dates of existing statements. To fix a purchase in a statement that has payments, reverse those payments first.
+
+Projections subtract pending and overdue obligations. Free money today considers the current cycle and, when viewing a future cycle, its commitments too. Overdue or future income is never assumed received. 3/6/12-month projections show each cycle's result, with no accumulated balance or returns.
+
+One main financial account per user in the MVP. Money reported as already saved must be included in the initial balance. Interest is entered by the user in the purchase's final total; there's no automatic charge calculation.
+
+## Configuration
+
+No application secret is required: sessions and recovery use cryptographic randomness and database verifiers. Never put bank credentials or tokens in the frontend.
+
+- Required binding: `DB` (D1), declared in `.openai/hosting.json`.
+- `WRANGLER_SEND_METRICS`: optional, off by default.
+- `CLOUDFLARE_CF_FETCH_ENABLED`: optional, for preview metadata only.
+- Local profile config lives in `.sites-runtime/`, ignored by Git.
+
+## Deployment
+
+The app is published as a private Site (OpenAI Sites hosting, which provisions D1 and applies migrations before publishing the Worker). The project identity is in `.openai/hosting.json`: reuse it instead of creating a second Site. The flow is: run tests and typecheck, build with the Sites `build-site.mjs` helper (keeping Vite's `sites()` integration), sync with `site-workflow.mjs` passing a write credential through stdin, then save and publish the returned commit and verify the publish state. Temporary publish tokens must never be written to the repository.
+
+The hosted Site is private by default, on top of Fluxo's own login. Before opening it to third parties, the privacy notice needs the controller's identity/contact and an infrastructure retention policy.
+
+## Limits and next steps
+
+P0 is implemented within the scope above. Out of scope: automatic weekly/biweekly frequencies, infinite recurrence renewal, multiple accounts/advanced reconciliation, UI backup restore and actual money transfers. Recurrences have an explicit horizon and must be renewed when they end. Editing a contribution is done by reversing it and entering a corrected one, preserving the audit trail.
+
+Pending P1/P2: scenario simulator, accumulated projection with goal evolution, CSV, PWA, notifications, Open Finance and an AI assistant. The privacy notice is not a legal compliance certification. The initial balance date can't be moved after existing movements, so the same money is never counted twice.
+
+---
+
+## 🇧🇷 Português
+
+# Findash (Fluxo) — gestão financeira pessoal
+
+Aplicação integrada em português, com cadastro por usuário/senha, recuperação de conta, banco persistente, orçamento automático, cartões e metas. Não usa dados fictícios para preencher o dashboard.
+
+## Executar localmente
+
+Requisitos: Node.js 24 LTS, npm e Git. O Node 24 também fornece o SQLite usado nos testes de integração.
+
+```powershell
+git clone https://github.com/UchoaEng/Findash.git
+cd Findash
+npm ci
+npm run build
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_neat_nova.sql
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_black_blur.sql
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_clean_lifeguard.sql
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0003_tiresome_wiccan.sql
+npm run dev
+```
+
+Abra a URL impressa pelo servidor, normalmente http://127.0.0.1:5173. Aplique cada migration somente uma vez por banco. Os quatro comandos de migration acima são para um banco novo.
 
 Para testar o artefato de produção localmente, use `npm start` após o build, e abra a URL impressa pelo Wrangler. Desenvolvimento e preview compartilham `.wrangler/state`; não apague essa pasta se quiser preservar os dados locais. O banco de produção é separado.
 
